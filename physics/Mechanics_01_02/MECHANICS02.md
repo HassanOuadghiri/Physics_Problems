@@ -403,35 +403,7 @@ which matches the given force.
 - $F(x)=-kx$ is a straight line through the origin with negative slope.
 - $U(x)=\frac{1}{2}kx^2$ is an upward-opening parabola.
 
-Example Python code:
-
-```python
-import numpy as np
-import matplotlib.pyplot as plt
-
-k = 2
-x = np.linspace(-3, 3, 400)
-F = -k * x
-U = 0.5 * k * x**2
-
-fig, ax = plt.subplots(1, 2, figsize=(10, 4))
-ax[0].plot(x, F)
-ax[0].axhline(0, color="black", linewidth=0.8)
-ax[0].axvline(0, color="black", linewidth=0.8)
-ax[0].set_title("Force")
-ax[0].set_xlabel("x")
-ax[0].set_ylabel("F(x)")
-
-ax[1].plot(x, U)
-ax[1].axhline(0, color="black", linewidth=0.8)
-ax[1].axvline(0, color="black", linewidth=0.8)
-ax[1].set_title("Potential Energy")
-ax[1].set_xlabel("x")
-ax[1].set_ylabel("U(x)")
-
-plt.tight_layout()
-plt.show()
-```
+![alt text](image.png)
 
 ---
 
@@ -508,38 +480,7 @@ x_{\max} < x_{\max}^{(0)}
 $$
 
 ### Numerical simulation in Python
-
-```python
-import numpy as np
-import matplotlib.pyplot as plt
-
-m = 1.0
-g = 9.81
-k = 0.4
-v0 = 20.0
-x0 = 10.0
-dt = 0.001
-t_max = 5.0
-
-t = np.arange(0, t_max + dt, dt)
-v = np.zeros_like(t)
-x = np.zeros_like(t)
-v[0] = v0
-x[0] = x0
-
-for i in range(len(t) - 1):
-    a = -g - (k / m) * v[i]
-    v[i + 1] = v[i] + a * dt
-    x[i + 1] = x[i] + v[i] * dt
-
-plt.figure(figsize=(8, 4))
-plt.plot(t, x, label="x(t)")
-plt.plot(t, v, label="v(t)")
-plt.xlabel("t")
-plt.legend()
-plt.grid(True)
-plt.show()
-```
+![alt text](image-1.png)
 
 ---
 
@@ -795,24 +736,7 @@ $$
 
 The motion is parabolic in the plane. A parametric plot of $x(t),y(t)$ gives the trajectory.
 
-Example Python code:
-
-```python
-import numpy as np
-import matplotlib.pyplot as plt
-
-t = np.linspace(0, 3, 400)
-x = t + 1.5 * t**2
-y = -t + 0.5 * t**2
-
-plt.figure(figsize=(5, 5))
-plt.plot(x, y)
-plt.xlabel("x")
-plt.ylabel("y")
-plt.grid(True)
-plt.axis("equal")
-plt.show()
-```
+![alt text](image-2.png)
 
 ### Work done by the force at $t=3\ \text{s}$
 
