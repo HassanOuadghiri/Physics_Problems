@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Damped Harmonic Oscillator Animation</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #121212;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+        }
+        h2, h3 {
+            margin: 5px 0;
+            text-align: center;
+        }
+        .subtitle {
+            color: #aaa;
+            font-size: 0.9em;
+            margin-bottom: 20px;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            max-width: 820px;
+        }
+        .canvas-row {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+        }
+        canvas {
+            background: #000;
+            border: 2px solid #333;
+            border-radius: 4px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        .controls {
+            display: flex;
+            gap: 30px;
+            background: #1e1e1e;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        input[type="range"] {
+            width: 200px;
+            cursor: pointer;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 0.85em;
+        }
+        .underdamped { background-color: #2196F3; color: white; }
+        .critically-damped { background-color: #FFC107; color: black; }
+        .overdamped { background-color: #F44336; color: white; }
+        
+        .formula {
+            background: #1e1e1e;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.95em;
+            color: #add8e6;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>Damped Harmonic Oscillator (RK4)</h2>
+        <p class="subtitle">m&middot;a + b&middot;v + k&middot;x = 0</p>
+
+        <!-- Animation Canvas -->
+        <canvas id="animCanvas" width="820" height="150"></canvas>
+
+        <!-- Graphs Row -->
+        <div class="canvas-row">
+            <div>
+                <h3>Position x(t)</h3>
+                <canvas id="xtCanvas" width="400" height="300"></canvas>
+            </div>
+            <div>
+                <h3>Phase Portrait (v vs x)</h3>
+                <canvas id="phaseCanvas" width="400" height="300"></canvas>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls">
+            <div class="control-group">
+                <label for="bSlider">Damping Parameter (b): <span id="b-val">0.5</span></label>
+                <input type="range" id="bSlider" min="0" max="8" step="0.1" value="0.5">
+            </div>
+            <div class="control-group">
+                <span>System State:</span>
+                <span id="regime-badge" class="status-badge underdamped">Underdamped</span>
+            </div>
+            <div class="control-group">
+                <button id="resetBtn">Reset System</button>
+            </div>
+        </div>
+
+        <div class="formula">
+            m = 1.0 kg &nbsp;&nbsp;|&nbsp;&nbsp; k = 4.0 N/m &nbsp;&nbsp;|&nbsp;&nbsp; Critical Damping b_c = &radic;(4mk) = 4.0
+        </div>
+    </div>
+
+    <script>
+        // System Parameters
+        const m = 1.0;
+        const k = 4.0;
+        let b = 0.5;
+        
+        // Critical damping value
+        const bc = Math.sqrt(4 * m * k);
+
+        // Simulation state
+        let x = 4.0; // initial position
+        let v = 0.0; // initial velocity
+        let t = 0.0;
+        const dt = 0.05; // Timestep for generic 60fps
+
+        // History arrays for graphing
+        let history = [];
+        const MAX_HISTORY = 600; // max points to keep displaying
+
+        // UI Elements
+        const animCanvas = document.getElementById('animCanvas');
+        const animCtx = animCanvas.getContext('2d');
+        const xtCanvas = document.getElementById('xtCanvas');
+        const xtCtx = xtCanvas.getContext('2d');
+        const phaseCanvas = document.getElementById('phaseCanvas');
+        const phaseCtx = phaseCanvas.getContext('2d');
+
+        const bSlider = document.getElementById('bSlider');
+        const bVal = document.getElementById('b-val');
+        const resetBtn = document.getElementById('resetBtn');
+        const regimeBadge = document.getElementById('regime-badge');
+
+        function updateRegimeBadge() {
+            if (b * b < 4 * m * k - 0.01) {
+                regimeBadge.className = 'status-badge underdamped';
+                regimeBadge.innerText = 'Underdamped';
+            } else if (Math.abs(b * b - 4 * m * k) <= 0.01) {
+                regimeBadge.className = 'status-badge critically-damped';
+                regimeBadge.innerText = 'Critically Damped';
+            } else {
+                regimeBadge.className = 'status-badge overdamped';
+                regimeBadge.innerText = 'Overdamped';
+            }
+        }
+
+        bSlider.addEventListener('input', () => {
+            b = parseFloat(bSlider.value);
+            bVal.innerText = b.toFixed(1);
+            updateRegimeBadge();
+        });
+
+        resetBtn.addEventListener('click', () => {
+            x = 4.0;
+            v = 0.0;
+            t = 0.0;
+            history = [];
+        });
+
+        // RK4 Integration function
+        function derivative(state) {
+            return {
+                dx: state.v,
+                dv: -(b / m) * state.v - (k / m) * state.x
+            };
+        }
+
+        function stepRK4() {
+            let k1 = derivative({ x: x, v: v });
+            let k2 = derivative({ x: x + k1.dx * dt / 2, v: v + k1.dv * dt / 2 });
+            let k3 = derivative({ x: x + k2.dx * dt / 2, v: v + k2.dv * dt / 2 });
+            let k4 = derivative({ x: x + k3.dx * dt, v: v + k3.dv * dt });
+
+            x += (dt / 6) * (k1.dx + 2 * k2.dx + 2 * k3.dx + k4.dx);
+            v += (dt / 6) * (k1.dv + 2 * k2.dv + 2 * k3.dv + k4.dv);
+            t += dt;
+        }
+
+        function drawAnim() {
+            animCtx.clearRect(0, 0, animCanvas.width, animCanvas.height);
+            
+            const originX = animCanvas.width / 2;
+            const originY = animCanvas.height / 2;
+            
+            // Scaling coordinate mapping
+            const scaleX = 40; 
+            const blockX = originX + x * scaleX;
+            const blockSize = 40;
+
+            // Draw center reference line
+            animCtx.beginPath();
+            animCtx.setLineDash([5, 5]);
+            animCtx.moveTo(originX, 10);
+            animCtx.lineTo(originX, animCanvas.height - 10);
+            animCtx.strokeStyle = '#555';
+            animCtx.stroke();
+            animCtx.setLineDash([]);
+
+            // Draw wall
+            animCtx.fillStyle = '#444';
+            animCtx.fillRect(10, 20, 20, animCanvas.height - 40);
+
+            // Draw spring (zigzag)
+            animCtx.beginPath();
+            animCtx.moveTo(30, originY);
+            const numCoils = 15;
+            const springWidth = blockX - 30 - blockSize/2;
+            for (let i = 1; i <= numCoils; i++) {
+                let coilX = 30 + (springWidth / numCoils) * (i - 0.5);
+                let coilY = originY + (i % 2 === 0 ? 15 : -15);
+                animCtx.lineTo(coilX, coilY);
+            }
+            animCtx.lineTo(blockX - blockSize/2, originY);
+            animCtx.strokeStyle = '#aaa';
+            animCtx.lineWidth = 2;
+            animCtx.stroke();
+
+            // Draw Block
+            animCtx.fillStyle = '#4CAF50';
+            animCtx.shadowBlur = 10;
+            animCtx.shadowColor = '#4CAF50';
+            animCtx.fillRect(blockX - blockSize/2, originY - blockSize/2, blockSize, blockSize);
+            animCtx.shadowBlur = 0; // reset
+        }
+
+        function drawXTGraph() {
+            xtCtx.clearRect(0, 0, xtCanvas.width, xtCanvas.height);
+            
+            // Grid and axes
+            const originY = xtCanvas.height / 2;
+            xtCtx.beginPath();
+            xtCtx.moveTo(0, originY);
+            xtCtx.lineTo(xtCanvas.width, originY);
+            xtCtx.strokeStyle = '#555';
+            xtCtx.stroke();
+
+            const xMaxRange = 5.0; // Max x value
+            
+            xtCtx.beginPath();
+            for (let i = 0; i < history.length; i++) {
+                let pt = history[i];
+                // Time window shifts left as time passes if too long
+                let t_draw = pt.t;
+                let viewWidth_t = MAX_HISTORY * dt; // 30 seconds
+                if (history[history.length-1].t > viewWidth_t) {
+                    t_draw = pt.t - (history[history.length-1].t - viewWidth_t);
+                }
+                
+                let plotX = (t_draw / viewWidth_t) * xtCanvas.width;
+                let plotY = originY - (pt.x / xMaxRange) * (xtCanvas.height / 2.2);
+
+                if (i === 0 || plotX < 0) xtCtx.moveTo(plotX, plotY);
+                else xtCtx.lineTo(plotX, plotY);
+            }
+            xtCtx.strokeStyle = '#00e5ff';
+            xtCtx.lineWidth = 2;
+            xtCtx.stroke();
+        }
+
+        function drawPhasePortrait() {
+            phaseCtx.clearRect(0, 0, phaseCanvas.width, phaseCanvas.height);
+            
+            const originX = phaseCanvas.width / 2;
+            const originY = phaseCanvas.height / 2;
+
+            // X and Y axes
+            phaseCtx.beginPath();
+            phaseCtx.moveTo(0, originY);
+            phaseCtx.lineTo(phaseCanvas.width, originY);
+            phaseCtx.moveTo(originX, 0);
+            phaseCtx.lineTo(originX, phaseCanvas.height);
+            phaseCtx.strokeStyle = '#555';
+            phaseCtx.stroke();
+
+            // Labels
+            phaseCtx.fillStyle = '#fff';
+            phaseCtx.font = "12px sans-serif";
+            phaseCtx.fillText("x", phaseCanvas.width - 15, originY - 10);
+            phaseCtx.fillText("v", originX + 10, 15);
+
+            const xMaxRange = 5.0;
+            const vMaxRange = 8.0;
+
+            if (history.length > 0) {
+                phaseCtx.beginPath();
+                for (let i = 0; i < history.length; i++) {
+                    let pt = history[i];
+                    let plotX = originX + (pt.x / xMaxRange) * (phaseCanvas.width / 2.2);
+                    let plotY = originY - (pt.v / vMaxRange) * (phaseCanvas.height / 2.2);
+
+                    if (i === 0) phaseCtx.moveTo(plotX, plotY);
+                    else phaseCtx.lineTo(plotX, plotY);
+                }
+                phaseCtx.strokeStyle = '#ff00ff';
+                phaseCtx.lineWidth = 2;
+                phaseCtx.stroke();
+
+                // Draw current position as a glowing dot
+                const last = history[history.length - 1];
+                let plotX = originX + (last.x / xMaxRange) * (phaseCanvas.width / 2.2);
+                let plotY = originY - (last.v / vMaxRange) * (phaseCanvas.height / 2.2);
+                
+                phaseCtx.beginPath();
+                phaseCtx.arc(plotX, plotY, 4, 0, 2 * Math.PI);
+                phaseCtx.fillStyle = '#fff';
+                phaseCtx.shadowBlur = 8;
+                phaseCtx.shadowColor = '#ff00ff';
+                phaseCtx.fill();
+                phaseCtx.shadowBlur = 0;
+            }
+        }
+
+        function loop() {
+            // Take 3 small integrator steps per frame to speed up the simulation visually
+            for(let i=0; i<3; i++) {
+                stepRK4();
+                history.push({ t: t, x: x, v: v });
+            }
+
+            // Prune history to keep memory usage bounded and graphs scrolling/clean
+            if (history.length > MAX_HISTORY) {
+                history = history.slice(history.length - MAX_HISTORY);
+            }
+
+            drawAnim();
+            drawXTGraph();
+            drawPhasePortrait();
+
+            requestAnimationFrame(loop);
+        }
+
+        // Initialize state flag and start
+        updateRegimeBadge();
+        loop();
+
+    </script>
+</body>
+</html>

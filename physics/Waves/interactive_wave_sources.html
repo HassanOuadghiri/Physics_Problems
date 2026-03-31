@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Wave Sources Superposition</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #121212;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+        }
+        h2 {
+            margin-bottom: 5px;
+        }
+        p.subtitle {
+            margin-top: 0;
+            color: #aaa;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+        }
+        .canvas-container {
+            position: relative;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            margin-bottom: 20px;
+            border: 2px solid #333;
+            background: #000;
+            cursor: crosshair;
+        }
+        .controls {
+            display: flex;
+            gap: 30px;
+            background: #1e1e1e;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 600px;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        input[type="range"] {
+            width: 150px;
+            cursor: pointer;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #ff4444;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background-color: #ff6666;
+        }
+        .formula {
+            margin-top: 20px;
+            background: #1e1e1e;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.95em;
+            color: #add8e6;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Multiple Wave Sources Interference</h2>
+    <p class="subtitle">Click on the canvas to place point wave sources.</p>
+    
+    <div class="canvas-container">
+        <canvas id="waveCanvas" width="600" height="400"></canvas>
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <label for="alpha">Decay Parameter ($\alpha$): <span id="alpha-val">0.5</span></label>
+            <input type="range" id="alpha" min="0" max="2" step="0.1" value="0.5">
+        </div>
+        <div class="control-group">
+            <label for="wavelength">Wavelength ($\lambda$): <span id="wave-val">30</span></label>
+            <input type="range" id="wavelength" min="15" max="100" value="30">
+        </div>
+        <div class="control-group">
+            <label for="amplitude">Base Amplitude ($A$): <span id="amp-val">500</span></label>
+            <input type="range" id="amplitude" min="10" max="2000" step="10" value="500">
+        </div>
+        <div class="control-group" style="justify-content: flex-end;">
+            <button id="clearBtn">Clear All Sources</button>
+        </div>
+    </div>
+
+    <div class="formula">
+        u(r, t) = &Sigma; [ (A / |r - r_0|^&alpha;) * sin(k|r - r_0| - &omega;t) ]
+    </div>
+
+    <script>
+        const canvas = document.getElementById('waveCanvas');
+        const ctx = canvas.getContext('2d');
+        const width = canvas.width;
+        const height = canvas.height;
+
+        // UI Elements
+        const alphaSlider = document.getElementById('alpha');
+        const waveSlider = document.getElementById('wavelength');
+        const ampSlider = document.getElementById('amplitude');
+        const alphaVal = document.getElementById('alpha-val');
+        const waveVal = document.getElementById('wave-val');
+        const ampVal = document.getElementById('amp-val');
+        const clearBtn = document.getElementById('clearBtn');
+
+        // Physics parameters
+        let alpha = parseFloat(alphaSlider.value);
+        let lambda = parseFloat(waveSlider.value);
+        let A = parseFloat(ampSlider.value);
+        let k = 2 * Math.PI / lambda;
+        
+        let t = 0;
+        const omega = 1.0; // Fixed angular velocity for visualization
+        const dt = 0.5;
+
+        // Array to store source positions
+        let sources = [];
+
+        // Update parameters on slider change
+        alphaSlider.oninput = () => { alpha = parseFloat(alphaSlider.value); alphaVal.innerText = alpha.toFixed(1); };
+        waveSlider.oninput = () => { lambda = parseFloat(waveSlider.value); k = 2 * Math.PI / lambda; waveVal.innerText = lambda; };
+        ampSlider.oninput = () => { A = parseFloat(ampSlider.value); ampVal.innerText = A; };
+        
+        // Add point source on click
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            sources.push({x, y});
+        });
+
+        // Clear sources
+        clearBtn.addEventListener('click', () => {
+            sources = [];
+        });
+
+        // Pre-allocate image data for performance
+        const imageData = ctx.createImageData(width, height);
+        const data = imageData.data;
+
+        function renderFrame() {
+            let idx = 0;
+            
+            // To ensure the visual amplitude is balanced regardless of alpha, 
+            // we scale the user's amplitude modifier.
+            // Specifically, when alpha changes, r^alpha varies wildly. 
+            // We'll calculate wave equations natively allowing A to govern visibility.
+
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    let u = 0;
+
+                    // Superposition from all sources
+                    for (let s = 0; s < sources.length; s++) {
+                        const src = sources[s];
+                        const dx = x - src.x;
+                        const dy = y - src.y;
+                        const r = Math.sqrt(dx*dx + dy*dy);
+                        
+                        // Prevent singularity close to r=0
+                        const safeR = Math.max(r, 1); 
+                        
+                        // Wave equation: (A / r^alpha) * sin(kr - wt)
+                        const amplitudeTerm = A / Math.pow(safeR, alpha);
+                        const phaseTerm = Math.sin(k * r - omega * t);
+                        
+                        u += amplitudeTerm * phaseTerm;
+                    }
+
+                    // Map displacement [-range, range] to color brightness [0, 255]
+                    // If no sources, defaults to flat grey (128)
+                    let color = 128 + u;
+                    
+                    // Constrain color ranges limit
+                    if (color > 255) color = 255;
+                    if (color < 0) color = 0;
+
+                    // Write pixel colors (Monochrome/Grayscale visual pattern)
+                    data[idx++] = color;     // Red
+                    data[idx++] = color;     // Green
+                    data[idx++] = color;     // Blue
+                    data[idx++] = 255;       // Alpha
+                }
+            }
+
+            // Push pixel data to canvas
+            ctx.putImageData(imageData, 0, 0);
+
+            // Draw the point sources explicitly as red dots overlay
+            ctx.fillStyle = '#ff4444';
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = '#ff0000';
+            for (let s = 0; s < sources.length; s++) {
+                ctx.beginPath();
+                ctx.arc(sources[s].x, sources[s].y, 4, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+            ctx.shadowBlur = 0; // reset
+
+            // Advance time and loop
+            t += dt;
+            requestAnimationFrame(renderFrame);
+        }
+
+        // Start animation loop
+        renderFrame();
+        
+        // Push an initial default source so it's not empty immediately upon opening
+        sources.push({ x: width / 2, y: height / 2 });
+
+    </script>
+</body>
+</html>
